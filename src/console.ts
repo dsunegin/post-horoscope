@@ -18,13 +18,7 @@ const logger = winston.createLogger({
         new winston.transports.File({filename: 'combined.log'}),
     ],
 });
-// create a stream object with a 'write' function that will be used by `morgan`
-const myStream = {
-    write: (message: string) => {
-        // use the 'info' log level so the output will be picked up by both transports (file and console)
-        logger.info(message);
-    }
-};
+
 //
 // If we're not in production then log to the `console` with the format:
 // `${info.level}: ${info.message} JSON.stringify({ ...rest }) `

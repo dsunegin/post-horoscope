@@ -33,9 +33,12 @@
   },
   "dependencies": {
     "crc": "^3.8.0",
+    "date-fns": "^2.22.1",
     "dotenv": "^10.0.0",
     "mysql2": "^2.2.5",
     "node-cron": "^3.0.0",
+    "nunjucks": "^3.2.3",
+    "slugify": "^1.5.3",
     "winston": "^3.3.3"
   }
 }

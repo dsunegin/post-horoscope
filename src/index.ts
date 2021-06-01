@@ -1,12 +1,22 @@
+import * as assets from './assets/assets';
 const mysql = require('mysql2');
-import * as console from './console.js';
-//const console = require('./console.js');
+//console = require('./console.js');
 const envconf = require('dotenv').config();
 const cron = require('node-cron');
+const nunjucks = require('nunjucks');
+const format = require('date-fns/format');
+const path = require('path');
 
 if (envconf.error) {    throw envconf.error; } // ERROR if Config .env file is missing
 
 const language = 'ru';
+const lang_loc ='ru-RU';
+const category ='89';       // Общество
+const subURL = '/ru-RU/article/society/';
+const Locale = require(`date-fns/locale/${language}`);
+
+// Посты в следующей последовательности:
+// 7-й ряд - рыбы. Ищется tamplate с множественным числом по префиксу m_
 const Zodiac = [
     {name: 'Овен', code: 'aries', href: 'https://1001goroskop.ru/?znak=aries'},
     {name: 'Телец', code: 'taurus', href: 'https://1001goroskop.ru/?znak=taurus'},
@@ -36,51 +46,67 @@ const connectionESOTERIC = mysql
     })
     .promise();
 
+const connectionPRESS = mysql
+    .createConnection({
+        host: process.env.DB_PRESSHOST,
+        port: process.env.DB_PRESSPORT,
+        user: process.env.DB_PRESSUSER,
+        database: process.env.DB_PRESSDATABASE,
+        password: process.env.DB_PRESSPASSWORD,
+    })
+    .promise();
+
 const main = async (): Promise<string> => {
     try {
+        const now: Date = new Date(); // Now
+        const dateLoc = format(now, 'do MMMM yyyy', {locale: Locale});
+        //const dateLoc2 = format(now, 'd MMMM yyyy', {locale: Locale});
+        let hrefArr = Zodiac.map(el => {
+            const elTitle = `${el.name} - гороскоп на сегодня ${dateLoc}`;
+            const elHref = assets.aliasSlug(elTitle,false);
+            return {elHref,elTitle};
+            });
+        let hrefTextAdd = hrefArr.map(el => `<a href="${subURL}${el.elHref}" title="${el.elTitle}">${el.elTitle}</a>`).join('<br>');
+
         let zodiacArr: Array<object> = [];
-        while (zodiacArr.length<16) {
+        while (zodiacArr.length<12) {
             let sql = `SELECT * FROM horoscope WHERE lang='${language}' AND published=1  ORDER BY RAND() LIMIT 1`;
             let result = await connectionESOTERIC.query(sql);
             let tplArr = result[0][0];
             // Uniq array
-            if(JSON.stringify(zodiacArr).indexOf(JSON.stringify(tplArr))== - 1) zodiacArr.push(tplArr);
+            const zodiacArrJSON = JSON.stringify(zodiacArr);
+            if(zodiacArr.length==6) {
+                if (zodiacArrJSON.indexOf('m_')!= - 1 && zodiacArrJSON.indexOf(JSON.stringify(tplArr))== - 1) zodiacArr.push(tplArr);
+            }
+            else if(zodiacArrJSON.indexOf(JSON.stringify(tplArr))== - 1) zodiacArr.push(tplArr);
         }
 
 
-        let sql = `SELECT * FROM horoscope WHERE lang='${language}' AND published=0  ORDER BY id ASC`;
-        let result = await connectionESOTERIC.query(sql);
-        if (result[0].length == 0) return "NO NEW ESOTERIC DATA";
-        const srcArr = result[0];
-
-        for (let i = 0, itpl; (itpl = srcArr[i]); ++i) {
-            let tpl = itpl.post.toString();
-            sql = `SELECT kto_chto,kogo_chego,komu_chemu,kogo_chto,kem_chem,kom_chom,m_kto_chto,m_kogo_chego,m_komu_chemu,m_kogo_chto,m_kem_chem,m_kom_chom FROM zodiac WHERE zodiac='${itpl.zodiac}' `;
-            result = await connectionESOTERIC.query(sql);
-            let zodiacArr = Object.entries(result[0][0]);
-
-            zodiacArr.sort((a:any, b:any) => {
-                // ASC  -> a.length - b.length
-                // DESC -> b.length - a.length
-                return b[1].length - a[1].length;
-            });
-            if (Object.keys(zodiacArr).length !== 0) {
-                for (let j = 0, zd:any; (zd = zodiacArr[j]); ++j) {
-                    if ( zd[1].toString().length == 0 || tpl.indexOf(zd[1])<0) continue;
-                    // create template
-                    const rpl = new RegExp(`${zd[1]}`, 'ig');
-                    tpl =  tpl.replace(rpl, `{{ ${zd[0]} }}` );
-                }
-            }
-            //sql = `UPDATE horoscope SET post_tpl=?, published=1  WHERE id=${itpl.id}`;
-            //result = await connectionESOTERIC.query(sql,[tpl]);
+        for (let i = 0, itpl: any; (itpl = zodiacArr[i]); ++i) {
+            let sql = `SELECT kto_chto,kogo_chego,komu_chemu,kogo_chto,kem_chem,kom_chom,m_kto_chto,m_kogo_chego,m_komu_chemu,m_kogo_chto,m_kem_chem,m_kom_chom FROM zodiac WHERE zodiac='${Zodiac[i].code}' `;
+            let result = await connectionESOTERIC.query(sql);
+            let zodiacArr = result[0][0];
+            let PersonImgPath = path.join(process.env.WEBSITE_ROOT_PATH,process.env.ZODIAK_PATH ,Zodiac[i].code);
+            PersonImgPath = path.resolve(PersonImgPath);
+            let PostImg = await assets.getRandomImage(PersonImgPath);
+            PostImg = PostImg.replace(path.resolve(process.env.WEBSITE_ROOT_PATH), '');
+            const PostTitle = `${Zodiac[i].name} - гороскоп на сегодня ${dateLoc}`;
+            let PostText = nunjucks.renderString(itpl.post_tpl, zodiacArr );
+            PostText = `<img alt="${PostTitle}" src="${PostImg}"> <p>${PostText}</p> ${hrefTextAdd}`;
+            let alias = hrefArr[i].elHref;
+            sql =
+                'INSERT INTO os0fr_content (title, alias, introtext, catid, language, state, created, publish_up, created_by,access,note) VALUES (?,?,?,?,?,1,NOW(),NOW(),84,1,?)';
+            const post = [PostTitle, alias, PostText, category, lang_loc,'horoscope'];
+            await connectionPRESS.query(sql, post);
+            console.log(`OK: ${Zodiac[i].code}`);
+        }
 
 
 
-        } // End For
+
         return 'Successful';
     } catch (err) {
-        console.log(err);
+        console.error(err);
         return err.message;
     }
 };
