@@ -62,11 +62,12 @@ const main = async (): Promise<string> => {
         const dateLoc = format(now, 'do MMMM yyyy', {locale: Locale});
         //const dateLoc2 = format(now, 'd MMMM yyyy', {locale: Locale});
         let hrefArr = Zodiac.map(el => {
-            const elTitle = `${el.name} - гороскоп на сегодня ${dateLoc}`;
-            const elHref = assets.aliasSlug(elTitle,false);
+            const elTitle = `${el.name} - гороскоп на сегодня`;
+            const elHref = assets.aliasSlug(`${el.name} - гороскоп на сегодня ${dateLoc}`,false);
             return {elHref,elTitle};
             });
         let hrefTextAdd = hrefArr.map(el => `<a href="${subURL}${el.elHref}" title="${el.elTitle}">${el.elTitle}</a>`).join('<br>');
+        hrefTextAdd = `<h2>Гороскоп для всех знаков зодиака на ${dateLoc}:</h2> ${hrefTextAdd}`
 
         let zodiacArr: Array<object> = [];
         while (zodiacArr.length<12) {
@@ -117,14 +118,14 @@ if (process.env.CRON) {
         process.env.CRON,
         () => {
             main()
-                .then()
+                .then(created => console.log(created))
                 .catch(err => console.error(err));
         },
         {scheduled: true}
     );
 } else {
     main()
-        .then(created => console.log({level: 'info',message: created}))
+        .then(created => console.log(created))
         .catch(err => console.error(err));
 }
 

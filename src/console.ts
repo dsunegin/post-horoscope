@@ -1,4 +1,3 @@
-// Include the logger module
 import * as winston from 'winston';
 
 const logger = winston.createLogger({
