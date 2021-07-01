@@ -16,7 +16,7 @@ const subURL = '/ru-RU/article/society/';
 const Locale = require(`date-fns/locale/${language}`);
 
 // Посты в следующей последовательности:
-// 7-й ряд - рыбы. Ищется tamplate с множественным числом по префиксу m_
+// 7-й ряд(#6) - рыбы. Ищется tamplate с множественным числом по префиксу m_
 const Zodiac = [
     {name: 'Овен', code: 'aries', href: 'https://1001goroskop.ru/?znak=aries'},
     {name: 'Телец', code: 'taurus', href: 'https://1001goroskop.ru/?znak=taurus'},
@@ -67,7 +67,7 @@ const main = async (): Promise<string> => {
             return {elHref,elTitle};
             });
         let hrefTextAdd = hrefArr.map(el => `<a href="${subURL}${el.elHref}" title="${el.elTitle}">${el.elTitle}</a>`).join('<br>');
-        hrefTextAdd = `<h2>Гороскоп для всех знаков зодиака на ${dateLoc}:</h2> ${hrefTextAdd}`
+        //hrefTextAdd = `<h2>Гороскоп для всех знаков зодиака на ${dateLoc}:</h2> ${hrefTextAdd}`
 
         let zodiacArr: Array<object> = [];
         while (zodiacArr.length<12) {
@@ -77,13 +77,19 @@ const main = async (): Promise<string> => {
             // Uniq array
             const zodiacArrJSON = JSON.stringify(zodiacArr);
             if(zodiacArr.length==6) {
-                if (zodiacArrJSON.indexOf('m_')!= - 1 && zodiacArrJSON.indexOf(JSON.stringify(tplArr))== - 1) zodiacArr.push(tplArr);
+                const tplJSON = JSON.stringify(tplArr);
+                if (tplJSON.indexOf('m_')!= -1 && zodiacArrJSON.indexOf(tplJSON)== - 1) zodiacArr.push(tplArr);
             }
             else if(zodiacArrJSON.indexOf(JSON.stringify(tplArr))== - 1) zodiacArr.push(tplArr);
         }
 
 
         for (let i = 0, itpl: any; (itpl = zodiacArr[i]); ++i) {
+
+
+
+
+            //
             let sql = `SELECT kto_chto,kogo_chego,komu_chemu,kogo_chto,kem_chem,kom_chom,m_kto_chto,m_kogo_chego,m_komu_chemu,m_kogo_chto,m_kem_chem,m_kom_chom FROM zodiac WHERE zodiac='${Zodiac[i].code}' `;
             let result = await connectionESOTERIC.query(sql);
             let zodiacArr = result[0][0];
@@ -95,10 +101,22 @@ const main = async (): Promise<string> => {
             let PostText = nunjucks.renderString(itpl.post_tpl, zodiacArr );
             PostText = `<img alt="${PostTitle}" src="${PostImg}"> <p>${PostText}</p> ${hrefTextAdd}`;
             let alias = hrefArr[i].elHref;
+
+            // Update yesterday horoscope with Link to current
+            let sqlU = `SELECT * FROM os0fr_content WHERE language='${lang_loc}' AND note='horoscope' AND title LIKE '%${Zodiac[i].name}%' ORDER BY publish_up DESC LIMIT 1`;
+            let resultU = await connectionPRESS.query(sqlU);
+            if (resultU[0].length > 0) {
+                let PostTextTommorrow = `${resultU[0][0].introtext} <a href="${subURL}${alias}" title="${Zodiac[i].name} - гороскоп на завтра"><h2>${Zodiac[i].name} - гороскоп на завтра<h2></a>`
+                let sqlUpd = `UPDATE os0fr_content SET introtext=?  WHERE id=${resultU[0][0].id}`;
+                await connectionPRESS.query(sqlUpd,[PostTextTommorrow]);
+            }
+            // Post Today Horoscope
             sql =
                 'INSERT INTO os0fr_content (title, alias, introtext, catid, language, state, created, publish_up, created_by,access,note) VALUES (?,?,?,?,?,1,NOW(),NOW(),84,1,?)';
             const post = [PostTitle, alias, PostText, category, lang_loc,'horoscope'];
             await connectionPRESS.query(sql, post);
+
+
             console.log(`OK: ${Zodiac[i].code}`);
         }
 

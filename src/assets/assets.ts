@@ -8,6 +8,16 @@ const {crc16} = require('crc');
 export const  wait = async (ms: number) => {
     return new Promise( (resolve) => {setTimeout(resolve, ms)});
 }
+export const getYesterday = (c: Date = new Date(), dateOnly = false) => {
+    let d = new Date(c);
+    d.setDate(d.getDate() - 1);
+    return dateOnly ? new Date(d.toDateString()) : d;
+};
+export const getTomorrow = (c: Date = new Date(), dateOnly = false) => {
+    let d = new Date(c);
+    d.setDate(d.getDate() + 1);
+    return dateOnly ? new Date(d.toDateString()) : d;
+};
 /**
  * getFiles returns a list of all files in a directory path {dirPath}
  * that match a given file extension {fileExt} (optional).
